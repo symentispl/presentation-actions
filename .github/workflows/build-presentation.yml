@@ -1,0 +1,58 @@
+name: Build presentation (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      slug:
+        description: 'Presentation slug; used as R2 prefix and must match content/presentations/*/slug in symentis-pl'
+        required: true
+        type: string
+      build_command:
+        description: 'mise task to produce the publishable directory'
+        required: false
+        type: string
+        default: 'mise run dist'
+      output_dir:
+        description: 'Directory containing index.html + slides.pdf + assets to upload'
+        required: false
+        type: string
+        default: 'build/dist'
+    secrets:
+      R2_ACCOUNT_ID:
+        required: true
+      R2_ACCESS_KEY_ID:
+        required: true
+      R2_SECRET_ACCESS_KEY:
+        required: true
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout caller repo
+        uses: actions/checkout@v6
+
+      - name: Install mise
+        uses: jdx/mise-action@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y graphviz chromium-browser
+
+      - name: Build presentation
+        run: ${{ inputs.build_command }}
+
+      - name: Verify output dir contains index.html and slides.pdf
+        run: |
+          test -f "${{ inputs.output_dir }}/index.html" || { echo "Missing ${{ inputs.output_dir }}/index.html"; exit 1; }
+          test -f "${{ inputs.output_dir }}/slides.pdf" || { echo "Missing ${{ inputs.output_dir }}/slides.pdf"; exit 1; }
+
+      - name: Publish to R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+        run: |
+          aws s3 sync "${{ inputs.output_dir }}/" "s3://symentis-presentations/${{ inputs.slug }}/" \
+            --delete \
+            --endpoint-url "https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com" \
+            --cache-control "public, max-age=300, must-revalidate"
