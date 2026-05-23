@@ -36,7 +36,7 @@ jobs:
         uses: jdx/mise-action@v4
 
       - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y graphviz chromium-browser
+        run: sudo apt-get update && sudo apt-get install -y graphviz google-chrome-stable
 
       - name: Build presentation
         run: ${{ inputs.build_command }}
